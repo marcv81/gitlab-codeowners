@@ -1,3 +1,6 @@
+import fnmatch
+
+
 class ParseError(Exception):
     def __init__(self, message):
         super().__init__(message)
@@ -58,6 +61,15 @@ class Owners:
                 raise ParseError("line %d: %s" % (i + 1, str(e)))
         return owners
 
+    def iter_owners(self, path):
+        """Iterates over the sections and owners of the specified path.
+        Ignores the sections which do not define any owner for the path.
+        """
+        for section in self._sections:
+            owners = section.owners(path)
+            if len(owners) > 0:
+                yield section, owners
+
 
 class Section:
     """A section in a CODEOWNERS file, including the unnamed section."""
@@ -74,6 +86,21 @@ class Section:
         lines = [header] if header != "" else []
         lines += [str(e) for e in self._entries]
         return "\n".join(lines)
+
+    def owners(self, path):
+        """Returns the owners of a path in the section."""
+        owners = list()
+        for entry in self._entries:
+            if _match(path, entry._pattern):
+                if entry._excluded:
+                    owners = list()
+                    break
+                else:
+                    if len(entry._owners) > 0:
+                        owners = entry._owners
+                    else:
+                        owners = self._header._owners
+        return owners
 
 
 class Header:
@@ -240,3 +267,31 @@ def _read_owners(line, i=0):
     if len(owner) > 0:
         owners.append("".join(owner))
     return owners
+
+
+def _match(path, pattern):
+    """Returns whether a path matches an entry pattern or not."""
+    # Prepend "**/" to relative patterns.
+    if pattern[0] != "/":
+        pattern = "**/" + pattern
+    pattern_elements = [e for e in pattern.split("/") if e != ""]
+    path_elements = [e for e in path.split("/") if e != ""]
+    return _elements_match(path_elements, pattern_elements)
+
+
+def _elements_match(path_elements, pattern_elements):
+    """Returns whether a path matches an entry pattern or not.
+    The path and pattern are lists of elements rather than strings.
+    """
+    if len(pattern_elements) == 0:
+        return True
+    if len(path_elements) == 0:
+        return False
+    if pattern_elements[0] == "**":
+        for i in range(0, len(path_elements)):
+            if _elements_match(path_elements[i:], pattern_elements[1:]):
+                return True
+        return False
+    if fnmatch.fnmatch(path_elements[0], pattern_elements[0]):
+        return _elements_match(path_elements[1:], pattern_elements[1:])
+    return False

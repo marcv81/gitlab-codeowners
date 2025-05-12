@@ -116,3 +116,23 @@ class TestNew(unittest.TestCase):
                 self.fail("expected ParseError %s" % expected_error)
             except codeowners.ParseError as actual_error:
                 self.assertEqual(expected_error, str(actual_error))
+
+    def test_match(self):
+        tests = [
+            ("README.md", "README.md", True),
+            ("index.html", "README.md", False),
+            ("README.md", "*.md", True),
+            ("index.html", "*.md", False),
+            ("docs/README.md", "docs", True),
+            ("docs/README.md", "/docs", True),
+            ("project/docs/README.md", "docs", True),
+            ("project/docs/README.md", "/docs", False),
+            ("docs/x/y/z/README.md", "/docs/**/README.md", True),
+            ("docs/README.md", "/docs/**/README.md", True),
+            ("docs/x/README.md", "/docs/*/README.md", True),
+            ("docs/README.md", "/docs/*/README.md", False),
+            ("docs", "/docs/README.md", False),
+        ]
+        for path, pattern, expected in tests:
+            actual = codeowners._match(path, pattern)
+            self.assertEqual(expected, actual)
